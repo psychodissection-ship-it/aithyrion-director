@@ -49,12 +49,13 @@ export class HardConstraintsService {
     if (lastShot) {
       let cutTime = 0;
       for (let i = history.length - 1; i >= 0; i--) {
-        if (history[i].pass2.final.cut_now || history[i].pass2.final.transition_type !== 'NONE') {
-          cutTime = history[i].time;
+        const item = history[i];
+        if (item?.pass2?.final?.cut_now || (item?.pass2?.final?.transition_type && item.pass2.final.transition_type !== 'NONE')) {
+          cutTime = item.time || 0;
           break;
         }
       }
-      currentShotDuration = currentState.time - cutTime;
+      currentShotDuration = (currentState.time || 0) - cutTime;
     }
 
     // --- Hard Constraint 1: Maximum Shot Duration Enforcement ---
@@ -84,7 +85,7 @@ export class HardConstraintsService {
     }
 
     // --- Low Confidence Handling: "迷っているときは動かさない" ---
-    if (lastShot) {
+    if (lastShot && lastShot.pass2?.final) {
       const prevDirection = lastShot.pass2.final;
 
       // 1. Shot Scale confidence check

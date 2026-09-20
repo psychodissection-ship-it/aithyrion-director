@@ -26,7 +26,7 @@ let lastStatusCheck = 0;
 /**
  * Make an HTTP request to the local Ollama daemon
  */
-function requestOllama<T>(method: string, path: string, body?: any, timeoutMs: number = 8000): Promise<T> {
+function requestOllama<T>(method: string, path: string, body?: any, timeoutMs: number = 25000): Promise<T> {
   return new Promise((resolve, reject) => {
     const postData = body ? JSON.stringify(body) : null;
     const req = http.request(
@@ -132,6 +132,7 @@ async function generateJson<T>(prompt: string, systemPrompt: string, modelOverri
     format: 'json',
     stream: false,
     options: {
+      num_gpu: 0, // Force CPU to prevent Vulkan pipeline host memory errors on mobile AMD GPUs
       temperature: 0.1, // Near deterministic for System 1 decision
       top_p: 0.8,
       num_predict: 256,
@@ -167,7 +168,7 @@ Output strictly valid JSON with this exact schema:
     "IMPACT_HOLD": number,
     "CONTINUE_TENSION": number
   },
-  "reasoning": string
+  "reasoning": "under 20 words rationale"
 }`;
 
   const prompt = `Current Music State:
@@ -362,7 +363,7 @@ Options for resolvedStrategy: 'INTENSIFY', 'RELEASE', 'IMPACT_HOLD', 'CONTINUE_T
 Output strictly valid JSON with this exact schema:
 {
   "resolvedStrategy": "INTENSIFY" | "RELEASE" | "IMPACT_HOLD" | "CONTINUE_TENSION",
-  "reasoning": string,
+  "reasoning": "concise 1 sentence rationale under 20 words",
   "diagnostic": {
     "impact_arrival": number between 0.0 and 1.0,
     "tension_should_continue": number between 0.0 and 1.0,
