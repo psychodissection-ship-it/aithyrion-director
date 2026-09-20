@@ -454,8 +454,8 @@ export const AudioDropzone: React.FC<AudioDropzoneProps> = ({
       const waveform = audioAnalyzer.extractWaveformPeaks(audioBuffer, 240);
       setRawWaveform(waveform);
 
-      // Default crop: first 30 seconds, or full length if shorter
-      const initialEnd = Math.min(audioBuffer.duration, 30.0);
+      // Default crop: Full track length (User can choose shorter clip presets if desired)
+      const initialEnd = audioBuffer.duration;
       setTrimStart(0);
       setTrimEnd(+initialEnd.toFixed(2));
       setPlayheadSec(0);
@@ -995,12 +995,12 @@ export const AudioDropzone: React.FC<AudioDropzoneProps> = ({
 
                 {/* Selected Duration Info */}
                 <div className="flex flex-col justify-center items-center bg-surface-800/80 border border-surface-700/50 rounded-lg p-2 text-center">
-                  <span className="text-slate-400 text-[11px]">Cropped Window Length</span>
+                  <span className="text-slate-400 text-[11px]">Selected Duration</span>
                   <span className="text-white text-sm font-bold tracking-tight">
-                    {selectedDuration.toFixed(2)}s
+                    {formatTime(selectedDuration)} ({selectedDuration.toFixed(1)}s)
                   </span>
-                  <span className="text-[10px] text-indigo-300">
-                    {selectedDuration <= 45 ? '✓ Ideal for MV PoC' : 'Extended Range'}
+                  <span className="text-[10.5px] text-emerald-400 font-semibold mt-0.5">
+                    予想カット数: ~{audioAnalyzer.estimateShotCount(selectedDuration, 124)}カット
                   </span>
                 </div>
               </div>
@@ -1015,19 +1015,13 @@ export const AudioDropzone: React.FC<AudioDropzoneProps> = ({
                       setTrimEnd(+totalDuration.toFixed(2));
                       stopPreviewAudio();
                     }}
-                    className="px-2 py-1 rounded bg-surface-800 hover:bg-surface-750 text-slate-300 border border-surface-700 transition text-[11px]"
+                    className={`px-2.5 py-1 rounded transition text-[11px] ${
+                      trimStart === 0 && Math.abs(trimEnd - totalDuration) < 0.2
+                        ? 'bg-indigo-600 text-white font-bold border border-indigo-400 shadow-sm'
+                        : 'bg-surface-800 hover:bg-surface-750 text-slate-300 border border-surface-700'
+                    }`}
                   >
-                    Full Track
-                  </button>
-                  <button
-                    onClick={() => {
-                      setTrimStart(0);
-                      setTrimEnd(+Math.min(15.0, totalDuration).toFixed(2));
-                      stopPreviewAudio();
-                    }}
-                    className="px-2 py-1 rounded bg-surface-800 hover:bg-surface-750 text-slate-300 border border-surface-700 transition text-[11px]"
-                  >
-                    First 15s
+                    Full Track (フル尺)
                   </button>
                   <button
                     onClick={() => {
@@ -1035,10 +1029,30 @@ export const AudioDropzone: React.FC<AudioDropzoneProps> = ({
                       setTrimEnd(+Math.min(30.0, totalDuration).toFixed(2));
                       stopPreviewAudio();
                     }}
-                    className="px-2 py-1 rounded bg-surface-800 hover:bg-surface-750 text-slate-300 border border-surface-700 transition text-[11px]"
+                    className={`px-2 py-1 rounded transition text-[11px] ${
+                      trimStart === 0 && Math.abs(trimEnd - 30.0) < 0.2
+                        ? 'bg-indigo-600 text-white font-bold border border-indigo-400 shadow-sm'
+                        : 'bg-surface-800 hover:bg-surface-750 text-slate-300 border border-surface-700'
+                    }`}
                   >
                     First 30s
                   </button>
+                  {totalDuration > 60 && (
+                    <button
+                      onClick={() => {
+                        setTrimStart(0);
+                        setTrimEnd(+Math.min(60.0, totalDuration).toFixed(2));
+                        stopPreviewAudio();
+                      }}
+                      className={`px-2 py-1 rounded transition text-[11px] ${
+                        trimStart === 0 && Math.abs(trimEnd - 60.0) < 0.2
+                          ? 'bg-indigo-600 text-white font-bold border border-indigo-400 shadow-sm'
+                          : 'bg-surface-800 hover:bg-surface-750 text-slate-300 border border-surface-700'
+                      }`}
+                    >
+                      First 60s
+                    </button>
+                  )}
                   {totalDuration > 40 && (
                     <button
                       onClick={() => {

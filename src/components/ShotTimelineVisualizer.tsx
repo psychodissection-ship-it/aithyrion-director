@@ -154,7 +154,7 @@ export const ShotTimelineVisualizer: React.FC<ShotTimelineVisualizerProps> = ({
               6. Shot Timeline & Storyboard
             </h2>
             <p className="text-[11px] text-slate-500 font-mono">
-              Final compiled MV shot plan sequence & Codex Keyframes
+              Final compiled MV shot plan sequence ({shotBlocks.length} Shots) & Codex Keyframes
             </p>
           </div>
         </div>

@@ -188,7 +188,18 @@ export class AudioAnalyzer {
   }
 
   /**
-   * Extract 6 to 10 meaningful cinematic cue points based on energy inflection, drops, and build-ups
+   * Helper to estimate shot count for a given duration and BPM
+   */
+  estimateShotCount(duration: number, bpm: number = 120): number {
+    if (duration <= 0) return 0;
+    const barSec = Math.max(1.0, (60 / (bpm || 120)) * 4);
+    const avgShotDuration = Math.min(6.0, Math.max(2.8, barSec * 2));
+    return Math.max(1, Math.round(duration / avgShotDuration));
+  }
+
+  /**
+   * Divide full audio duration into continuous cinematic MV shot points
+   * Quantized to musical bars and snapped to dynamic onsets/transients.
    */
   private extractInflectionPoints(
     frames: { time: number; energy: number }[],
@@ -196,167 +207,158 @@ export class AudioAnalyzer {
     duration: number,
     bpm: number
   ): TimelinePoint[] {
-    if (frames.length === 0) return [];
+    if (frames.length === 0 || duration <= 0) return [];
 
-    const candidates: {
-      time: number;
-      energy: number;
-      energyTrend: EnergyTrend;
-      onsetStrength: number;
-      section: string;
-      description: string;
-    }[] = [];
+    const effectiveBpm = bpm > 40 && bpm < 260 ? bpm : 124;
+    const beatSec = 60 / effectiveBpm;
+    const barSec = beatSec * 4; // 1 bar (4 beats)
 
-    // Helper to sample frame at time
+    // Helper to sample frame at time t
     const getEnergyAt = (t: number): number => {
       const idx = Math.min(frames.length - 1, Math.max(0, Math.floor((t / duration) * frames.length)));
       return frames[idx]?.energy || 0.1;
     };
 
-    // Helper to calculate energy trend over window
-    const getTrendAt = (t: number): EnergyTrend => {
-      const current = getEnergyAt(t);
-      const past = getEnergyAt(Math.max(0, t - 1.5));
-      const delta = current - past;
+    // Helper to get average energy in interval [tStart, tEnd]
+    const getAvgEnergyIn = (tStart: number, tEnd: number): number => {
+      const startIdx = Math.min(frames.length - 1, Math.max(0, Math.floor((tStart / duration) * frames.length)));
+      const endIdx = Math.min(frames.length - 1, Math.max(0, Math.floor((tEnd / duration) * frames.length)));
+      if (startIdx >= endIdx) return getEnergyAt(tStart);
+      let sum = 0;
+      for (let i = startIdx; i <= endIdx; i++) {
+        sum += frames[i].energy;
+      }
+      return sum / (endIdx - startIdx + 1);
+    };
 
-      if (delta > 0.25) return 'rapidly_rising';
-      if (delta > 0.08) return 'rising';
+    // Helper to determine energy trend comparing current interval to previous
+    const getEnergyTrend = (currentAvg: number, prevAvg: number): EnergyTrend => {
+      const delta = currentAvg - prevAvg;
+      if (delta > 0.18) return 'rapidly_rising';
+      if (delta > 0.05) return 'rising';
       if (delta < -0.12) return 'falling';
-      if (current > 0.75) return 'plateau';
+      if (currentAvg > 0.72) return 'plateau';
       return 'stable';
     };
 
-    // Helper to get nearest onset strength
-    const getOnsetAt = (t: number): number => {
-      const nearby = onsets.filter((o) => Math.abs(o.time - t) < 0.6);
-      if (nearby.length === 0) return 0.2;
-      return Math.max(...nearby.map((o) => o.strength));
+    // Helper to get peak onset strength in interval
+    const getPeakOnsetIn = (tStart: number, tEnd: number): number => {
+      const matched = onsets.filter((o) => o.time >= tStart && o.time <= tEnd);
+      if (matched.length === 0) return 0.2;
+      return Math.max(...matched.map((o) => o.strength));
     };
 
-    // 1. Initial Intro point (at 10% or 3-5 seconds)
-    const introTime = Math.min(4.0, +(duration * 0.08).toFixed(2));
-    candidates.push({
-      time: introTime,
-      energy: getEnergyAt(introTime),
-      energyTrend: 'rising',
-      onsetStrength: getOnsetAt(introTime),
-      section: 'Intro Pad',
-      description: 'Opening atmosphere & scene establishment',
-    });
+    // Determine section label for a time t
+    const getSectionLabel = (t: number, avgEnergy: number): { section: string; description: string } => {
+      const relPos = t / duration;
 
-    // 2. Find Peak Climax / Drop point
-    let peakIdx = 0;
-    let peakEnergy = 0;
-    for (let i = 0; i < frames.length; i++) {
-      if (frames[i].energy > peakEnergy) {
-        peakEnergy = frames[i].energy;
-        peakIdx = i;
+      if (relPos < 0.08) {
+        return { section: 'Intro Atmosphere', description: 'Opening atmosphere & visual establishment' };
       }
-    }
-    const peakTime = frames[peakIdx]?.time || duration * 0.6;
-
-    // 3. Build-up start (prior to peak)
-    const buildStartTime = +(peakTime * 0.5).toFixed(2);
-    candidates.push({
-      time: buildStartTime,
-      energy: getEnergyAt(buildStartTime),
-      energyTrend: 'rising',
-      onsetStrength: getOnsetAt(buildStartTime),
-      section: 'Build A',
-      description: 'Bass entry & gradual rhythmic build-up',
-    });
-
-    // 4. Pre-peak acceleration
-    const accelTime = +(peakTime * 0.78).toFixed(2);
-    candidates.push({
-      time: accelTime,
-      energy: getEnergyAt(accelTime),
-      energyTrend: 'rapidly_rising',
-      onsetStrength: Math.max(0.6, getOnsetAt(accelTime)),
-      section: 'Build B',
-      description: 'Percussion acceleration & tension spike',
-    });
-
-    // 5. Pre-drop tension (1-2 seconds before peak hit)
-    const preDropTime = Math.max(accelTime + 1.0, +(peakTime - 1.8).toFixed(2));
-    if (preDropTime < peakTime) {
-      candidates.push({
-        time: preDropTime,
-        energy: getEnergyAt(preDropTime),
-        energyTrend: 'rising',
-        onsetStrength: getOnsetAt(preDropTime),
-        section: 'Pre-Drop Tension',
-        description: 'Pre-drop ambiguity & diagnostic tension',
-      });
-    }
-
-    // 6. Main Climax / Drop Hit
-    candidates.push({
-      time: +peakTime.toFixed(2),
-      energy: Math.max(0.9, peakEnergy),
-      energyTrend: 'plateau',
-      onsetStrength: 0.95,
-      section: 'Main Drop',
-      description: 'Climax / Drop Hit (Decisive Impact)',
-    });
-
-    // 7. Post-drop breakdown / release (few seconds after peak)
-    const releaseTime = Math.min(duration - 3.0, +(peakTime + 4.5).toFixed(2));
-    if (releaseTime < duration) {
-      candidates.push({
-        time: releaseTime,
-        energy: Math.max(0.25, getEnergyAt(releaseTime)),
-        energyTrend: 'falling',
-        onsetStrength: Math.min(0.4, getOnsetAt(releaseTime)),
-        section: 'Post-Drop Breakdown',
-        description: 'Post-drop breath & visual release',
-      });
-    }
-
-    // 8. Outro if duration permits
-    const outroTime = +(duration * 0.92).toFixed(2);
-    if (outroTime > releaseTime + 3.0) {
-      candidates.push({
-        time: outroTime,
-        energy: Math.max(0.1, getEnergyAt(outroTime)),
-        energyTrend: 'falling',
-        onsetStrength: 0.15,
-        section: 'Outro Fade',
-        description: 'Outro decay & closing transition',
-      });
-    }
-
-    // Sort by time and remove duplicates within 1.5 seconds
-    candidates.sort((a, b) => a.time - b.time);
-    const filtered: typeof candidates = [];
-    for (const c of candidates) {
-      if (filtered.length === 0 || c.time - filtered[filtered.length - 1].time >= 2.0) {
-        filtered.push(c);
+      if (relPos < 0.24) {
+        return { section: 'Verse 1 (Narrative)', description: 'Narrative progression & rhythmic character movement' };
       }
+      if (relPos < 0.38) {
+        return { section: 'Build-Up 1 (Pre-Chorus)', description: 'Percussive buildup & tension acceleration' };
+      }
+      if (relPos < 0.54) {
+        return avgEnergy > 0.65
+          ? { section: 'Chorus 1 (Drop)', description: 'High energy hook & dynamic visual performance' }
+          : { section: 'Chorus 1 (Melodic)', description: 'Melodic release & sweeping camera angles' };
+      }
+      if (relPos < 0.68) {
+        return { section: 'Verse 2 (Breakdown)', description: 'Post-drop breath, contrast & narrative development' };
+      }
+      if (relPos < 0.78) {
+        return { section: 'Build-Up 2 (Bridge Tension)', description: 'Secondary acceleration & climactic buildup' };
+      }
+      if (relPos < 0.92) {
+        return { section: 'Climax Chorus (Final Drop)', description: 'Maximum impact peak & intense cinematic action' };
+      }
+      return { section: 'Outro (Fade)', description: 'Closing resolution & fade-out' };
+    };
+
+    // Construct sequential cuts from 0.0 to duration
+    const cutTimes: number[] = [0.0];
+    let currentT = 0.0;
+    const minShotDur = 2.0; // Minimum 2.0s per shot to prevent visual jitter
+    const maxShotDur = 7.5; // Maximum 7.5s per shot (below HardConstraints 8.0s limit)
+
+    while (currentT < duration - minShotDur) {
+      const localEnergy = getAvgEnergyIn(currentT, Math.min(duration, currentT + barSec * 2));
+
+      // Choose target bar count based on local energy
+      let targetBars: number;
+      if (localEnergy > 0.75) {
+        targetBars = barSec >= 2.2 ? 1 : 2;
+      } else if (localEnergy > 0.45) {
+        targetBars = 2;
+      } else {
+        targetBars = barSec >= 2.0 ? 3 : 4;
+      }
+
+      let idealNextT = currentT + targetBars * barSec;
+
+      // Clamp to min/max duration
+      idealNextT = Math.max(currentT + minShotDur, Math.min(currentT + maxShotDur, idealNextT));
+
+      // Don't leave a tiny orphaned tail at the end
+      if (duration - idealNextT < minShotDur) {
+        break; // The final cut will span to duration
+      }
+
+      // Beat snapping: look for nearest onset within ±0.35s of idealNextT
+      const snapWindow = 0.35;
+      const nearbyOnsets = onsets.filter(
+        (o) => Math.abs(o.time - idealNextT) <= snapWindow && o.time > currentT + minShotDur && o.time < duration - minShotDur
+      );
+
+      let snappedT = idealNextT;
+      if (nearbyOnsets.length > 0) {
+        // Pick the strongest onset in the snap window
+        nearbyOnsets.sort((a, b) => b.strength - a.strength);
+        snappedT = nearbyOnsets[0].time;
+      }
+
+      snappedT = +snappedT.toFixed(2);
+      cutTimes.push(snappedT);
+      currentT = snappedT;
     }
 
-    // Map to TimelinePoint[] with nextMajorChange calculation
-    return filtered.map((c, idx) => {
-      const nextTime = idx + 1 < filtered.length ? filtered[idx + 1].time : duration;
-      const nextMajorChange = +(nextTime - c.time).toFixed(2);
+    // Now map cut intervals into TimelinePoint[]
+    let prevAvgEnergy = 0.2;
+    const points: TimelinePoint[] = [];
+
+    for (let i = 0; i < cutTimes.length; i++) {
+      const t = cutTimes[i];
+      const nextT = i + 1 < cutTimes.length ? cutTimes[i + 1] : duration;
+      const shotDuration = +(nextT - t).toFixed(2);
+      const avgEnergy = +getAvgEnergyIn(t, nextT).toFixed(2);
+      const trend = getEnergyTrend(avgEnergy, prevAvgEnergy);
+      const onset = +getPeakOnsetIn(t, Math.min(duration, t + 1.2)).toFixed(2);
+      const { section, description } = getSectionLabel(t, avgEnergy);
+
+      prevAvgEnergy = avgEnergy;
 
       const musicState: MusicState = {
-        time: c.time,
-        energy: +c.energy.toFixed(2),
-        energyTrend: c.energyTrend,
-        onsetStrength: +c.onsetStrength.toFixed(2),
-        nextMajorChange,
-        bpm,
-        section: c.section,
+        time: t,
+        energy: avgEnergy,
+        energyTrend: trend,
+        onsetStrength: onset,
+        nextMajorChange: shotDuration,
+        bpm: effectiveBpm,
+        section,
       };
 
-      return {
-        id: `custom-pt-${idx + 1}`,
-        time: c.time,
-        description: c.description,
+      points.push({
+        id: `shot-pt-${i + 1}`,
+        time: t,
+        description: `${description} [${shotDuration}s]`,
         musicState,
-      };
-    });
+      });
+    }
+
+    return points;
   }
 
   /**

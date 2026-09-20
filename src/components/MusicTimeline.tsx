@@ -63,10 +63,13 @@ export const MusicTimeline: React.FC<MusicTimelineProps> = ({
           <span className="px-1.5 py-0.5 rounded bg-surface-750 text-slate-400 font-mono text-[11px] border border-surface-700">
             {bpm} BPM
           </span>
+          <span className="px-2 py-0.5 rounded bg-indigo-950/70 text-indigo-300 font-mono text-[11px] border border-indigo-700/60 font-semibold">
+            {timeline.length} Shots ({history.length} Directed)
+          </span>
           {isCustomTrack && (
             <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10.5px]">
               <Sparkles className="w-3 h-3" />
-              <span>Auto-DSP Ingested</span>
+              <span>Full-Track DSP Ingested</span>
             </span>
           )}
         </div>
