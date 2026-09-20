@@ -1,0 +1,54 @@
+[
+  {
+    "id": "sara",
+    "name": "Sara",
+    "identity_reference": "references/characters/sara/identity.png",
+    "description": "Dynamic cyberpunk protagonist with signature crimson/rose neural jacket",
+    "defaultColorPalette": [
+      "#e11d48",
+      "#0f172a",
+      "#38bdf8"
+    ],
+    "defaultLocation": "Neo-Tokyo Industrial Rooftop",
+    "defaultCostume": "Tactical Cyber Rose Hoodie & Combat Gear"
+  },
+  {
+    "id": "lexia",
+    "name": "Lexia",
+    "identity_reference": "references/characters/lexia/identity.png",
+    "description": "Calculated tactical intelligence operative with cyan holographic neural visor",
+    "defaultColorPalette": [
+      "#06b6d4",
+      "#1e1b4b",
+      "#f8fafc"
+    ],
+    "defaultLocation": "High-altitude Cyber Command Spire",
+    "defaultCostume": "Neural Interface Sleek Bodysuit & Trenchcoat"
+  },
+  {
+    "id": "amber",
+    "name": "Amber",
+    "identity_reference": "references/characters/amber/identity.png",
+    "description": "Energetic cybernetic engineer with brass pilot goggles and cheerful disposition",
+    "defaultColorPalette": [
+      "#f59e0b",
+      "#78350f",
+      "#fef3c7"
+    ],
+    "defaultLocation": "Subterranean Cyber Workshop",
+    "defaultCostume": "Steampunk Aviator Gear & Utility Belt"
+  },
+  {
+    "id": "zzax",
+    "name": "zzax",
+    "identity_reference": "references/characters/zzax/identity.png",
+    "description": "Custom character created for MV: zzax",
+    "defaultLocation": "Neo-Tokyo High-Altitude Spire",
+    "defaultCostume": "Tactical Cyber Hoodie & Combat Gear",
+    "defaultColorPalette": [
+      "#6366f1",
+      "#ec4899",
+      "#06b6d4"
+    ]
+  }
+]
