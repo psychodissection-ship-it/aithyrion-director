@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShotHistoryItem } from '../types/director';
+import { ShotHistoryItem, TimelinePoint } from '../types/director';
 import { CharacterProfile } from '../types/codexBridge';
 import { videoPromptCompiler } from '../services/codex/VideoPromptCompiler';
 import { MVConcept } from '../services/director/MVConceptService';
@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   Copy,
   Check,
+  Wand2,
 } from 'lucide-react';
 
 export interface StoryboardKeyframeInfo {
@@ -35,6 +36,7 @@ export interface BatchGenerationProgress {
 
 interface ShotTimelineVisualizerProps {
   history: ShotHistoryItem[];
+  timeline?: TimelinePoint[];
   totalDuration?: number;
   activeCharacter?: CharacterProfile | null;
   activeMVConcept?: MVConcept | null;
@@ -50,6 +52,7 @@ interface ShotTimelineVisualizerProps {
 
 export const ShotTimelineVisualizer: React.FC<ShotTimelineVisualizerProps> = ({
   history,
+  timeline,
   totalDuration = 32.0,
   activeCharacter,
   activeMVConcept,
@@ -63,6 +66,8 @@ export const ShotTimelineVisualizer: React.FC<ShotTimelineVisualizerProps> = ({
   onOpenReelModal,
 }) => {
   const [copiedShotIndex, setCopiedShotIndex] = useState<number | null>(null);
+
+  const totalExpectedShots = timeline && timeline.length > 0 ? timeline.length : history.length;
 
   const handleCopyPrompt = (shotIndex: number, item: ShotHistoryItem, duration: number) => {
     const promptObj = videoPromptCompiler.compilePrompt({
@@ -78,7 +83,8 @@ export const ShotTimelineVisualizer: React.FC<ShotTimelineVisualizerProps> = ({
     setCopiedShotIndex(shotIndex);
     setTimeout(() => setCopiedShotIndex(null), 2000);
   };
-  if (history.length === 0) {
+
+  if (history.length === 0 && (!timeline || timeline.length === 0)) {
     return (
       <div className="bg-surface-850 border border-surface-700/60 rounded-xl p-5 text-center shadow-sm">
         <div className="flex items-center space-x-2 pb-3 border-b border-surface-700/50 mb-3">
@@ -187,7 +193,7 @@ export const ShotTimelineVisualizer: React.FC<ShotTimelineVisualizerProps> = ({
               ) : (
                 <>
                   <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                  <span>Generate All via Codex</span>
+                  <span>Generate All via Codex ({totalExpectedShots} Shots)</span>
                 </>
               )}
             </button>

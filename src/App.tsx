@@ -23,7 +23,7 @@ import { LocalGemmaSetupModal } from './components/director/LocalGemmaSetupModal
 import { mvConceptService, MVConcept } from './services/director/MVConceptService';
 import { AlertCircle, Terminal, AlertOctagon, Sparkles, Compass, Music2, Upload } from 'lucide-react';
 import { createDirectorEngine, JevDirectorEngine } from './services/engine';
-import { JevHealthStatus, JevEngineMode } from './types/director';
+import { JevHealthStatus, JevEngineMode, ShotHistoryItem } from './types/director';
 import { KeyframeJob, CodexCliStatus, CharacterProfile } from './types/codexBridge';
 import { codexBridgeService } from './services/codex/CodexBridgeService';
 import { continuityManager } from './services/codex/ContinuityManager';
@@ -223,8 +223,8 @@ export const App: React.FC = () => {
   /**
    * One-click Codex Keyframe Generation for a specific shot
    */
-  const generateKeyframeForShot = async (shotIndex: number) => {
-    const sorted = [...history].sort((a, b) => a.time - b.time);
+  const generateKeyframeForShot = async (shotIndex: number, currentSortedHistory?: ShotHistoryItem[]) => {
+    const sorted = currentSortedHistory || [...history].sort((a, b) => a.time - b.time);
     const item = sorted[shotIndex - 1];
     if (!item) return;
 
@@ -262,16 +262,32 @@ export const App: React.FC = () => {
   };
 
   /**
-   * Batch generate all shots sequentially via Codex
+   * Batch generate all shots sequentially via Codex.
+   * Guarantees 100% of the timeline shots are directed before generating keyframes!
    */
   const generateAllKeyframes = async () => {
     setIsBatchGenerating(true);
-    const sorted = [...history].sort((a, b) => a.time - b.time);
-    const total = sorted.length;
+
+    // 1. Ensure all timeline points are fully directed
+    let activeHistory = [...history];
+    if (activeHistory.length < timeline.length) {
+      setBatchProgress({
+        currentShot: 0,
+        totalShots: timeline.length,
+        shotTime: 0,
+        characterName: activeCharacter?.name || 'Character',
+        strategy: 'AI 全自動演出を実行中...',
+      });
+      activeHistory = await autoDirectAll();
+    }
+
+    const sorted = [...activeHistory].sort((a, b) => a.time - b.time);
+    const total = sorted.length || timeline.length;
     const charName = activeCharacter?.name || 'Character';
 
     for (let i = 1; i <= total; i++) {
       const item = sorted[i - 1];
+      if (!item) continue;
       setBatchProgress({
         currentShot: i,
         totalShots: total,
@@ -279,7 +295,7 @@ export const App: React.FC = () => {
         characterName: charName,
         strategy: item.effectiveStrategy,
       });
-      await generateKeyframeForShot(i);
+      await generateKeyframeForShot(i, sorted);
     }
     setIsBatchGenerating(false);
     setBatchProgress(null);
@@ -567,6 +583,7 @@ export const App: React.FC = () => {
             {/* 6. Shot Timeline & Storyboard Visualizer */}
             <ShotTimelineVisualizer
               history={history}
+              timeline={timeline}
               totalDuration={audioPlayer.duration || activeTrack.duration}
               activeCharacter={activeCharacter}
               activeMVConcept={activeMVConcept}

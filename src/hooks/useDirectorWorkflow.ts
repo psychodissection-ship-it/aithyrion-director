@@ -112,20 +112,19 @@ export function useDirectorWorkflow() {
           pass2: p2,
         };
 
-        setHistory((prev) => {
-          const existingIdx = prev.findIndex((h) => Math.abs(h.time - targetPoint.time) < 0.05);
-          if (existingIdx >= 0) {
-            const updated = [...prev];
-            updated[existingIdx] = historyItem;
-            return updated;
-          }
-          return [...prev, historyItem];
-        });
+        const nextHistory = [
+          ...historyRef.current.filter((h) => Math.abs(h.time - targetPoint.time) >= 0.05),
+          historyItem,
+        ].sort((a, b) => a.time - b.time);
+        historyRef.current = nextHistory;
 
+        setHistory(nextHistory);
         setStage('POINT_FINALIZED');
+        return historyItem;
       } catch (err) {
         console.error('Director workflow error at index', index, err);
         setStage('IDLE');
+        return null;
       }
     },
     [timeline]
@@ -166,15 +165,21 @@ export function useDirectorWorkflow() {
   /**
    * Auto Direct all points across the timeline sequentially
    */
-  const autoDirectAll = useCallback(async () => {
-    setIsAutoDirecting(true);
-    for (let i = 0; i < timeline.length; i++) {
-      setCurrentIndex(i);
-      await evaluatePointAtIndex(i);
-      await new Promise((resolve) => setTimeout(resolve, 300));
-    }
-    setIsAutoDirecting(false);
-  }, [timeline.length, evaluatePointAtIndex]);
+  const autoDirectAll = useCallback(
+    async (targetTimeline = timeline): Promise<ShotHistoryItem[]> => {
+      setIsAutoDirecting(true);
+      const results: ShotHistoryItem[] = [];
+      for (let i = 0; i < targetTimeline.length; i++) {
+        setCurrentIndex(i);
+        const item = await evaluatePointAtIndex(i, targetTimeline);
+        if (item) results.push(item);
+        await new Promise((resolve) => setTimeout(resolve, 80));
+      }
+      setIsAutoDirecting(false);
+      return results;
+    },
+    [timeline, evaluatePointAtIndex]
+  );
 
   /**
    * Load custom analyzed track data
@@ -182,6 +187,7 @@ export function useDirectorWorkflow() {
   const loadCustomTrack = useCallback(
     (analyzed: AnalyzedTrackData) => {
       setHistory([]);
+      historyRef.current = [];
       setCurrentIndex(0);
       setPass1Decision(null);
       setDiagnosticResolution(null);
@@ -202,10 +208,11 @@ export function useDirectorWorkflow() {
       setActiveTrack(newTrack);
 
       setTimeout(() => {
-        evaluatePointAtIndex(0, analyzed.timeline);
+        // Auto-direct all shots across the entire timeline
+        autoDirectAll(analyzed.timeline);
       }, 50);
     },
-    [evaluatePointAtIndex]
+    [autoDirectAll]
   );
 
   /**

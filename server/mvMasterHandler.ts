@@ -353,8 +353,8 @@ export async function handleMvMasterRequest(
       } else {
         // Direct binary stream upload
         const chunks: Buffer[] = [];
+        const MAX_AUDIO_SIZE = 150 * 1024 * 1024; // 150 MB for full-length uncompressed audio
         let totalSize = 0;
-        const MAX_AUDIO_SIZE = 50 * 1024 * 1024; // 50 MB
         await new Promise<void>((resolve, reject) => {
           req.on('data', (c) => {
             const buf = Buffer.isBuffer(c) ? c : Buffer.from(c);
