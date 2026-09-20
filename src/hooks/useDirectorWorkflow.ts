@@ -87,9 +87,17 @@ export function useDirectorWorkflow() {
         // Diagnostic Pass if ambiguous / confidence < 0.30
         if (p1.requiresDiagnostic) {
           setStage('DIAGNOSTIC_ANALYZING');
-          diagRes = await engine.diagnoseStrategy(targetPoint.musicState, currentHistory, p1);
-          setDiagnosticResolution(diagRes);
-          effectiveStrategy = diagRes.resolvedStrategy;
+          try {
+            diagRes = await engine.diagnoseStrategy(targetPoint.musicState, currentHistory, p1);
+            if (diagRes?.resolvedStrategy) {
+              effectiveStrategy = diagRes.resolvedStrategy;
+            }
+            setDiagnosticResolution(diagRes);
+          } catch (diagErr) {
+            console.warn(`[Director] Diagnostic pass failed at shot index ${index}, using Pass 1 strategy:`, diagErr);
+            effectiveStrategy = p1.strategy;
+            setDiagnosticResolution(null);
+          }
         } else {
           setDiagnosticResolution(null);
         }

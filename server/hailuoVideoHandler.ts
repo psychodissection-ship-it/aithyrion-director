@@ -139,6 +139,19 @@ function downloadFile(url: string, destPath: string): Promise<void> {
   });
 }
 
+/**
+ * Safely normalize video duration according to model capabilities:
+ * - MiniMax-H3 / H3-Max (v2): supports 5s or 10s
+ * - MiniMax-Hailuo-2.3 / Hailuo-02 (v1): strictly supports 6s or 10s (5s will be rejected)
+ */
+export function normalizeVideoDuration(model: string = '', duration?: number): number {
+  const isH3 = model.startsWith('MiniMax-H3');
+  if (isH3) {
+    return (duration && duration >= 8) ? 10 : 5;
+  }
+  return (duration && duration >= 8) ? 10 : 6;
+}
+
 function getMinimaxApiKey(): string {
   const envPath = path.join(process.cwd(), '.env');
   if (fs.existsSync(envPath)) {
@@ -227,19 +240,21 @@ export async function handleHailuoVideoRequest(
             role: 'first_frame',
           });
         }
+        const normalizedDur = normalizeVideoDuration(model, duration);
         payload = {
           model,
           content,
           resolution: '768P',
-          duration: duration || 5,
+          duration: normalizedDur,
           ratio: firstFrameBase64 ? 'adaptive' : '16:9',
         };
       } else {
+        const normalizedDur = normalizeVideoDuration(model, duration);
         payload = {
           model,
           prompt,
           prompt_optimizer: true,
-          duration,
+          duration: normalizedDur,
         };
         if (firstFrameBase64) {
           payload.first_frame_image = firstFrameBase64;
@@ -547,7 +562,7 @@ export async function handleHailuoVideoRequest(
           prompt: s.prompt,
           keyframePath: s.keyframePath,
           model: s.model || defaultModel,
-          duration: s.duration || 6,
+          duration: normalizeVideoDuration(s.model || defaultModel, s.duration),
           status: 'pending',
           progressMessage: '待機中',
         })),
@@ -660,6 +675,7 @@ async function runBatchProcess(apiKey: string, host: string) {
       const isH3 = model.startsWith('MiniMax-H3');
       const apiPath = isH3 ? '/v2/video_generation' : '/v1/video_generation';
 
+      const normalizedDur = normalizeVideoDuration(model, item.duration);
       let payload: Record<string, any>;
       if (isH3) {
         const content: any[] = [{ type: 'text', text: item.prompt }];
@@ -674,7 +690,7 @@ async function runBatchProcess(apiKey: string, host: string) {
           model,
           content,
           resolution: '768P',
-          duration: item.duration || 5,
+          duration: normalizedDur,
           ratio: firstFrameBase64 ? 'adaptive' : '16:9',
         };
       } else {
@@ -682,7 +698,7 @@ async function runBatchProcess(apiKey: string, host: string) {
           model,
           prompt: item.prompt,
           prompt_optimizer: true,
-          duration: item.duration || 6,
+          duration: normalizedDur,
         };
         if (firstFrameBase64) {
           payload.first_frame_image = firstFrameBase64;

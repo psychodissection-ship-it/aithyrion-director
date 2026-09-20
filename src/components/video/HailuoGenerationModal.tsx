@@ -313,8 +313,12 @@ export const HailuoGenerationModal: React.FC<HailuoGenerationModalProps> = ({
                     <select
                       value={selectedModel}
                       onChange={(e) => {
-                        setSelectedModel(e.target.value);
-                        hailuoVideoService.setPreferredModel(e.target.value);
+                        const newModel = e.target.value;
+                        setSelectedModel(newModel);
+                        hailuoVideoService.setPreferredModel(newModel);
+                        if (!newModel.startsWith('MiniMax-H3') && videoDuration === 5) {
+                          setVideoDuration(6);
+                        }
                       }}
                       className="w-full px-2.5 py-2 rounded-lg bg-surface-850 border border-surface-700 text-white text-xs focus:outline-none focus:border-indigo-500"
                     >
@@ -340,8 +344,10 @@ export const HailuoGenerationModal: React.FC<HailuoGenerationModalProps> = ({
                       onChange={(e) => setVideoDuration(Number(e.target.value))}
                       className="w-full px-2.5 py-2 rounded-lg bg-surface-850 border border-surface-700 text-white text-xs focus:outline-none focus:border-indigo-500"
                     >
-                      <option value={5}>5 秒 (Fast)</option>
-                      <option value={6}>6 秒 (Standard)</option>
+                      {selectedModel.startsWith('MiniMax-H3') && (
+                        <option value={5}>5 秒 (H3 Fast)</option>
+                      )}
+                      <option value={6}>6 秒 (Standard / Hailuo推奨)</option>
                       <option value={10}>10 秒 (Extended)</option>
                     </select>
                   </div>

@@ -317,7 +317,7 @@ export const StoryboardReelModal: React.FC<StoryboardReelModalProps> = ({
         shotIndex: s.shotIndex,
         prompt: prompt.englishPrompt,
         keyframePath: kf?.path,
-        duration: Math.min(6, Math.max(5, Math.round(s.duration))),
+        duration: s.duration >= 8 ? 10 : 6,
         model: 'MiniMax-Hailuo-2.3',
       };
     });
