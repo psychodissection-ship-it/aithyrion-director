@@ -54,7 +54,7 @@ export class JevDirectorEngine implements DirectorEngine {
     }
   }
 
-  public async setMode(mode: 'LIVE_REMOTE' | 'SIMULATED'): Promise<{ success: boolean; mode: JevEngineMode }> {
+  public async setMode(mode: 'LIVE_REMOTE' | 'LOCAL_GEMMA' | 'SIMULATED'): Promise<{ success: boolean; mode: JevEngineMode }> {
     const res = await fetch(`${this.proxyBase}/mode`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

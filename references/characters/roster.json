@@ -50,5 +50,18 @@
       "#ec4899",
       "#06b6d4"
     ]
+  },
+  {
+    "id": "opalopal",
+    "name": "OpalOpal",
+    "identity_reference": "references/characters/opalopal/identity.png",
+    "description": "Custom character created for MV: OpalOpal",
+    "defaultLocation": "Neo-Tokyo High-Altitude Spire",
+    "defaultCostume": "Tactical Cyber Hoodie & Combat Gear",
+    "defaultColorPalette": [
+      "#6366f1",
+      "#ec4899",
+      "#06b6d4"
+    ]
   }
 ]

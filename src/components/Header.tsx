@@ -32,6 +32,7 @@ interface HeaderProps {
   codexStatus?: CodexCliStatus | null;
   onOpenInspector: () => void;
   onOpenReferences?: () => void;
+  onOpenGemmaSetup?: () => void;
   onEvaluate: () => void;
   onStepNext: () => void;
   onAutoDirect: () => void;
@@ -50,6 +51,7 @@ export const Header: React.FC<HeaderProps> = ({
   codexStatus,
   onOpenInspector,
   onOpenReferences,
+  onOpenGemmaSetup,
   onEvaluate,
   onStepNext,
   onAutoDirect,
@@ -62,27 +64,50 @@ export const Header: React.FC<HeaderProps> = ({
 
   const renderJevStatusBadge = () => {
     switch (jevMode) {
+      case 'LOCAL_GEMMA':
+        return (
+          <button
+            onClick={onOpenGemmaSetup}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-[11px] font-mono font-bold hover:bg-cyan-500/25 transition cursor-pointer"
+            title="Local Gemma (OpenJev) Engine - Click to configure"
+          >
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+            <span>GEMMA: LOCAL</span>
+          </button>
+        );
       case 'LIVE_REMOTE':
         return (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[11px] font-mono font-bold">
+          <button
+            onClick={onOpenGemmaSetup}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[11px] font-mono font-bold hover:bg-emerald-500/25 transition cursor-pointer"
+            title="TypeSafe AI SystemOne (Cloud) - Click to configure"
+          >
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>JEV: LIVE_REMOTE</span>
-          </div>
+            <span>JEV: CLOUD</span>
+          </button>
         );
       case 'SIMULATED':
         return (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-mono font-bold">
+          <button
+            onClick={onOpenGemmaSetup}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-mono font-bold hover:bg-amber-500/25 transition cursor-pointer"
+            title="Playground Simulation - Click to configure"
+          >
             <span className="w-2 h-2 rounded-full bg-amber-400" />
             <span>JEV: SIMULATED</span>
-          </div>
+          </button>
         );
       case 'NOT_CONFIGURED':
       default:
         return (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-500/20 border border-rose-500/40 text-rose-300 text-[11px] font-mono font-bold">
+          <button
+            onClick={onOpenGemmaSetup}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-500/20 border border-rose-500/40 text-rose-300 text-[11px] font-mono font-bold hover:bg-rose-500/30 transition cursor-pointer"
+            title="Director Engine not configured - Click to setup Local Gemma or Cloud JEV"
+          >
             <AlertOctagon className="w-3 h-3 text-rose-400" />
-            <span>LIVE JEV NOT CONFIGURED</span>
-          </div>
+            <span>DIRECTOR: CONFIGURE</span>
+          </button>
         );
     }
   };

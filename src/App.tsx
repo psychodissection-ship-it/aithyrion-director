@@ -19,10 +19,11 @@ import { KeyframeReviewModal } from './components/codex/KeyframeReviewModal';
 import { ReferenceManagerModal } from './components/codex/ReferenceManagerModal';
 import { StoryboardReelModal } from './components/codex/StoryboardReelModal';
 import { MVConceptAnalysisModal } from './components/director/MVConceptAnalysisModal';
+import { LocalGemmaSetupModal } from './components/director/LocalGemmaSetupModal';
 import { mvConceptService, MVConcept } from './services/director/MVConceptService';
 import { AlertCircle, Terminal, AlertOctagon, Sparkles, Compass, Music2, Upload } from 'lucide-react';
 import { createDirectorEngine, JevDirectorEngine } from './services/engine';
-import { JevHealthStatus } from './types/director';
+import { JevHealthStatus, JevEngineMode } from './types/director';
 import { KeyframeJob, CodexCliStatus, CharacterProfile } from './types/codexBridge';
 import { codexBridgeService } from './services/codex/CodexBridgeService';
 import { continuityManager } from './services/codex/ContinuityManager';
@@ -72,11 +73,25 @@ export const App: React.FC = () => {
 
   const [isConceptModalOpen, setIsConceptModalOpen] = useState<boolean>(false);
   const [activeMVConcept, setActiveMVConcept] = useState<MVConcept | null>(null);
+  const [isGemmaModalOpen, setIsGemmaModalOpen] = useState<boolean>(false);
 
   const isEvaluating = stage.includes('ANALYZING');
   const canStepNext = currentIndex + 1 < timeline.length;
   const currentEngine = createDirectorEngine(engineType);
   const jevEngineInstance = useMemo(() => new JevDirectorEngine(), []);
+
+  const handleSelectJevMode = useCallback(
+    async (mode: JevEngineMode) => {
+      try {
+        await jevEngineInstance.setMode(mode as any);
+        const h = await jevEngineInstance.checkHealth();
+        setJevHealth(h);
+      } catch (err) {
+        console.error('Failed to change JEV mode:', err);
+      }
+    },
+    [jevEngineInstance]
+  );
 
   const refreshJevHealth = useCallback(async () => {
     try {
@@ -312,6 +327,7 @@ export const App: React.FC = () => {
         codexStatus={codexStatus}
         onOpenInspector={() => setIsInspectorOpen(true)}
         onOpenReferences={() => setIsReferenceModalOpen(true)}
+        onOpenGemmaSetup={() => setIsGemmaModalOpen(true)}
         onEvaluate={evaluateCurrentPoint}
         onStepNext={stepNext}
         onAutoDirect={autoDirectAll}
@@ -717,6 +733,15 @@ export const App: React.FC = () => {
         onConceptApplied={(concept) => {
           setActiveMVConcept(concept);
         }}
+      />
+
+      {/* Local Gemma (OpenJev) Setup & Mode Switcher Modal */}
+      <LocalGemmaSetupModal
+        isOpen={isGemmaModalOpen}
+        onClose={() => setIsGemmaModalOpen(false)}
+        currentMode={jevHealth?.mode || 'NOT_CONFIGURED'}
+        onSelectMode={handleSelectJevMode}
+        onRefreshHealth={refreshJevHealth}
       />
     </div>
   );

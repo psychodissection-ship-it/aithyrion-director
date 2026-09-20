@@ -11,6 +11,12 @@ import {
 } from '../src/types/director';
 import { HardConstraintsService } from '../src/services/engine/HardConstraintsService';
 import { parseJsonBody, sendJson } from './utils';
+import {
+  checkLocalGemmaStatus,
+  evaluatePass1WithGemma,
+  evaluatePass2WithGemma,
+  diagnoseWithGemma,
+} from './openJevBridge';
 
 const hardConstraints = new HardConstraintsService();
 
@@ -23,9 +29,8 @@ let currentProxyMode: JevEngineMode = (process.env.JEV_API_ENDPOINT && process.e
 let lastInspectorTelemetry: JevInspectorTelemetry | null = null;
 
 /**
- * JEV Server-Side Proxy Controller (Phase 3 Live JEV Proof):
- * Enforces strict fail-closed security for Live JEV, manages engine states,
- * and feeds the Raw Request / Response Inspector.
+ * JEV Server-Side Proxy Controller:
+ * Supports Live TypeSafe AI (Remote), Local Gemma (OpenJev via Ollama), and Playground Simulation.
  */
 export async function handleJevProxyRequest(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
   const url = req.url || '';
@@ -39,37 +44,57 @@ export async function handleJevProxyRequest(req: IncomingMessage, res: ServerRes
   const hasApiKey = Boolean(apiKey && apiKey.trim().length > 0);
 
   // Auto-detect mode if not explicitly set
-  if (currentProxyMode === 'NOT_CONFIGURED' && hasEndpoint && hasApiKey) {
-    currentProxyMode = 'LIVE_REMOTE';
+  if (currentProxyMode === 'NOT_CONFIGURED') {
+    if (hasEndpoint && hasApiKey) {
+      currentProxyMode = 'LIVE_REMOTE';
+    } else {
+      const gemma = await checkLocalGemmaStatus();
+      if (gemma.ollamaOnline && gemma.gemmaAvailable) {
+        currentProxyMode = 'LOCAL_GEMMA';
+      }
+    }
   }
 
   try {
     // 1. Health check endpoint (Strict schema, NO secrets returned)
     if (url === '/api/jev/health' && req.method === 'GET') {
+      const gemmaStatus = await checkLocalGemmaStatus();
       const isConfigured = hasEndpoint && hasApiKey;
       const effectiveMode: JevEngineMode =
-        currentProxyMode === 'SIMULATED'
+        currentProxyMode === 'LOCAL_GEMMA'
+          ? 'LOCAL_GEMMA'
+          : currentProxyMode === 'SIMULATED'
           ? 'SIMULATED'
           : isConfigured
           ? 'LIVE_REMOTE'
+          : gemmaStatus.ollamaOnline
+          ? 'LOCAL_GEMMA'
           : 'NOT_CONFIGURED';
 
       const healthResponse: JevHealthStatus = {
-        configured: isConfigured || effectiveMode === 'SIMULATED',
+        configured: isConfigured || effectiveMode === 'LOCAL_GEMMA' || effectiveMode === 'SIMULATED',
         mode: effectiveMode,
         endpointConfigured: hasEndpoint,
         apiKeyConfigured: hasApiKey,
         endpointUrl: hasEndpoint ? endpoint?.replace(/\/\/.*@/, '//***@') : undefined,
+        gemmaStatus,
       };
 
       sendJson(res, 200, healthResponse);
       return true;
     }
 
-    // 2. Mode toggle endpoint (for testing between LIVE_REMOTE and SIMULATED)
+    // 1.5. Local Gemma status endpoint
+    if (url === '/api/jev/gemma-status' && req.method === 'GET') {
+      const status = await checkLocalGemmaStatus();
+      sendJson(res, 200, status);
+      return true;
+    }
+
+    // 2. Mode toggle endpoint (LIVE_REMOTE, LOCAL_GEMMA, SIMULATED)
     if (url === '/api/jev/mode' && req.method === 'POST') {
       const { mode } = await parseJsonBody<{ mode: JevEngineMode }>(req);
-      if (mode === 'SIMULATED' || mode === 'LIVE_REMOTE') {
+      if (mode === 'SIMULATED' || mode === 'LIVE_REMOTE' || mode === 'LOCAL_GEMMA') {
         currentProxyMode = mode;
         sendJson(res, 200, { success: true, mode: currentProxyMode });
         return true;
@@ -224,6 +249,42 @@ export async function handleJevProxyRequest(req: IncomingMessage, res: ServerRes
         }
       }
 
+      // LOCAL GEMMA (OPENJEV) EXECUTION
+      if (currentProxyMode === 'LOCAL_GEMMA') {
+        try {
+          const gemmaData = await evaluatePass1WithGemma(state, history);
+          const latencyMs = Math.round(performance.now() - t0);
+
+          lastInspectorTelemetry = {
+            timestamp: new Date().toISOString(),
+            endpoint: 'http://localhost:11434 (Local Gemma / OpenJev)',
+            mode: 'LOCAL_GEMMA',
+            requestState: state,
+            requestQuestions,
+            response: {
+              selected_option: gemmaData.strategy,
+              probabilities: gemmaData.alternatives.reduce(
+                (acc, a) => ({ ...acc, [a.strategy]: a.probability }),
+                { [gemmaData.strategy]: gemmaData.probability }
+              ),
+              confidence: gemmaData.confidence,
+              alternatives: gemmaData.alternatives,
+            },
+            latencyMs,
+          };
+
+          sendJson(res, 200, gemmaData);
+          return true;
+        } catch (gemmaErr: any) {
+          sendJson(res, 502, {
+            error: 'LOCAL_GEMMA_ERROR',
+            message: gemmaErr.message,
+            mode: 'LOCAL_GEMMA',
+          });
+          return true;
+        }
+      }
+
       // EXPLICIT SIMULATION MODE (Only active when mode === 'SIMULATED')
       if (currentProxyMode === 'SIMULATED') {
         const energy = state.energy;
@@ -325,6 +386,15 @@ export async function handleJevProxyRequest(req: IncomingMessage, res: ServerRes
         }
 
         sendJson(res, upstreamRes.status, upstreamData);
+        return true;
+      }
+
+      if (currentProxyMode === 'LOCAL_GEMMA') {
+        const resolution = await diagnoseWithGemma(state, pass1, history);
+        if (lastInspectorTelemetry) {
+          lastInspectorTelemetry.response.diagnostic = resolution.diagnostic;
+        }
+        sendJson(res, 200, resolution);
         return true;
       }
 
@@ -460,6 +530,13 @@ export async function handleJevProxyRequest(req: IncomingMessage, res: ServerRes
           confidences = upstreamData.confidences;
         }
 
+        const evaluated = hardConstraints.evaluate(raw, confidences, state, history);
+        sendJson(res, 200, evaluated);
+        return true;
+      }
+
+      if (currentProxyMode === 'LOCAL_GEMMA') {
+        const { raw, confidences } = await evaluatePass2WithGemma(state, strategy, history);
         const evaluated = hardConstraints.evaluate(raw, confidences, state, history);
         sendJson(res, 200, evaluated);
         return true;

@@ -102,7 +102,15 @@ export interface TimelinePoint {
 /**
  * JEV Engine Operational States
  */
-export type JevEngineMode = 'LIVE_REMOTE' | 'SIMULATED' | 'NOT_CONFIGURED' | 'ERROR';
+export type JevEngineMode = 'LIVE_REMOTE' | 'LOCAL_GEMMA' | 'SIMULATED' | 'NOT_CONFIGURED' | 'ERROR';
+
+export interface LocalGemmaStatus {
+  ollamaOnline: boolean;
+  gemmaAvailable: boolean;
+  modelName?: string;
+  availableModels: string[];
+  ollamaVersion?: string;
+}
 
 export interface JevHealthStatus {
   configured: boolean;
@@ -110,6 +118,7 @@ export interface JevHealthStatus {
   endpointConfigured: boolean;
   apiKeyConfigured: boolean;
   endpointUrl?: string;
+  gemmaStatus?: LocalGemmaStatus;
 }
 
 export interface JevInspectorTelemetry {
